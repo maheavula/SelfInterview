@@ -67,7 +67,7 @@ selfinterview AI+ is a next-generation interview preparation platform that uses 
    ```
 
 5. **Open your browser:**  
-   Visit [http://localhost:5173](https://selfinterview.vercel.app/)
+   Visit [site](https://selfinterview.vercel.app/)
 
 ## 🌐 Deployment (Vercel)
 
