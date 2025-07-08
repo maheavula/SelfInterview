@@ -67,7 +67,7 @@ selfinterview AI+ is a next-generation interview preparation platform that uses 
    ```
 
 5. **Open your browser:**  
-   Visit [http://localhost:5173](http://localhost:5173)
+   Visit [http://localhost:5173](https://selfinterview.vercel.app/)
 
 ## 🌐 Deployment (Vercel)
 
@@ -82,4 +82,4 @@ selfinterview AI+ is a next-generation interview preparation platform that uses 
 
 ---
 
-&copy; {year} selfinterview AI+. All rights reserved.
+&copy; 2025 selfinterview AI+. All rights reserved.
