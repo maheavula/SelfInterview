@@ -142,13 +142,7 @@ app.post('/api/gemini', async (req, res) => {
   }
 });
 
-// Handle preflight requests for API endpoints
-app.options('/api/*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.status(200).end();
-});
+// CORS middleware handles preflight requests automatically
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
