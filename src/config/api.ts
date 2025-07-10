@@ -3,7 +3,7 @@ const isDevelopment = import.meta.env.DEV;
 
 export const API_BASE_URL = isDevelopment 
   ? 'http://localhost:3001' 
-  : 'https://your-actual-render-url.onrender.com'; // Replace with your actual Render URL
+  : 'https://selfinterview.onrender.com'; // Your actual Render URL
 
 export const API_ENDPOINTS = {
   GEMINI: `${API_BASE_URL}/api/gemini`,
