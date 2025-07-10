@@ -15,9 +15,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://your-domain.vercel.app', 'http://localhost:5173'] 
-    : 'http://localhost:5173',
+  origin: true, // Allow all origins for now
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -42,6 +40,12 @@ app.use((req, res, next) => {
 
 // Gemini API proxy endpoint
 app.post('/api/gemini', async (req, res) => {
+  console.log('Received API request:', { 
+    hasPrompt: !!req.body.prompt, 
+    hasApiKey: !!req.body.userApiKey,
+    origin: req.headers.origin 
+  });
+  
   try {
     const { prompt, model = 'gemini-2.5-pro', userApiKey } = req.body;
     
