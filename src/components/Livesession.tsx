@@ -9,6 +9,7 @@ import interviewerAnimation from "../assets/interviewer.json";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from '../hooks/useAuth';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function Livesession() {
   const navigate = useNavigate();
@@ -189,8 +190,7 @@ export default function Livesession() {
     try {
       const feedback = await generateInterviewFeedback(
         answeredPairs.map(p => p.question),
-        answeredPairs.map(p => p.answer),
-        apiKey!
+        answeredPairs.map(p => p.answer)
       );
       setFeedbackData(feedback);
       setShowFeedback(true);
@@ -408,25 +408,25 @@ Important Instructions:
   }
 
   // Function to call Gemini API and generate questions
-  async function generateInterviewQuestions(userData: InterviewUserData, apiKey: string) {
+  async function generateInterviewQuestions(userData: InterviewUserData) {
     const prompt = buildGeminiPrompt(userData);
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
-    const body = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ]
-    };
-    const res = await fetch(endpoint, {
+    const userApiKey = sessionStorage.getItem('geminiApiKey');
+    if (!userApiKey) {
+      throw new Error('API key not found. Please configure your API key first.');
+    }
+    
+    const res = await fetch(API_ENDPOINTS.GEMINI, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        prompt: prompt,
+        model: 'gemini-2.5-pro',
+        userApiKey: userApiKey
+      })
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.error?.message || 'Failed to generate questions');
+      throw new Error(err.error || 'Failed to generate questions');
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -471,7 +471,7 @@ Important Instructions:
       experience: form.experience,
       jobDescription: form.jobDescription,
       resumeText: form.resumeText || ''
-    }, apiKey)
+    })
       .then(qs => setQuestions(qs))
       .catch(err => setQuestionError(err.message))
       .finally(() => setLoadingQuestions(false));
@@ -584,25 +584,25 @@ Important Instructions:
   }, [isSpeaking]);
 
   // Function to generate continuation questions (no introductory questions)
-  async function generateContinuationQuestions(userData: InterviewUserData, apiKey: string) {
+  async function generateContinuationQuestions(userData: InterviewUserData) {
     const prompt = buildContinuationPrompt(userData);
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
-    const body = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ]
-    };
-    const res = await fetch(endpoint, {
+    const userApiKey = sessionStorage.getItem('geminiApiKey');
+    if (!userApiKey) {
+      throw new Error('API key not found. Please configure your API key first.');
+    }
+    
+    const res = await fetch(API_ENDPOINTS.GEMINI, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        prompt: prompt,
+        model: 'gemini-2.5-pro',
+        userApiKey: userApiKey
+      })
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.error?.message || 'Failed to generate continuation questions');
+      throw new Error(err.error || 'Failed to generate continuation questions');
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -641,7 +641,7 @@ Important Instructions:
         experience: form.experience,
         jobDescription: form.jobDescription,
         resumeText: form.resumeText || ''
-      }, apiKey);
+      });
       setQuestions(prev => [...prev, ...newQuestions]);
       console.log('Added continuation questions:', newQuestions);
     } catch (err: any) {
@@ -651,7 +651,7 @@ Important Instructions:
     }
   };
 
-  async function generateInterviewFeedback(questions: string[], answers: string[], apiKey: string) {
+  async function generateInterviewFeedback(questions: string[], answers: string[]) {
     const prompt = `
 You are acting as an AI interview evaluator. The user has completed a mock interview session. During the session, the following data was collected:
 
@@ -698,23 +698,24 @@ Please return the full output as a valid JSON object structured like this:
 }
 
 IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explanation, markdown, or formatting. Do NOT use triple backticks. Do NOT add any text before or after the JSON. The response must be a valid JSON object only.`;
-    const endpoint = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
-    const body = {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }]
-        }
-      ]
-    };
-    const res = await fetch(endpoint, {
+    
+    const userApiKey = sessionStorage.getItem('geminiApiKey');
+    if (!userApiKey) {
+      throw new Error('API key not found. Please configure your API key first.');
+    }
+    
+    const res = await fetch(API_ENDPOINTS.GEMINI, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({
+        prompt: prompt,
+        model: 'gemini-2.5-pro',
+        userApiKey: userApiKey
+      })
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.error?.message || 'Failed to generate feedback');
+      throw new Error(err.error || 'Failed to generate feedback');
     }
     const data = await res.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';

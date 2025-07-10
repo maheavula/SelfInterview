@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrainCircuit, Mic, Video, CheckCircle, XCircle, Info, Lightbulb, Globe, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { API_ENDPOINTS } from '../config/api';
 
 export default function InterviewSystemCheck() {
   const [micAllowed, setMicAllowed] = useState<null | boolean>(null);
@@ -141,33 +142,38 @@ export default function InterviewSystemCheck() {
     setApiKeyError('');
     setApiKeyValid(false);
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+      const res = await fetch(API_ENDPOINTS.GEMINI, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: 'hello' }]
-            }
-          ]
+          prompt: 'hello',
+          model: 'gemini-2.5-pro',
+          userApiKey: apiKey // Pass user's API key to proxy
         })
       });
       if (res.ok) {
         setApiKeyValid(true);
+        // Store the user's API key for the session
         sessionStorage.setItem('geminiApiKey', apiKey);
       } else {
         let errMsg = 'Invalid Gemini API key. Please enter a valid key.';
         try {
           const err = await res.json();
-          if (err.error && err.error.message) {
-            errMsg = err.error.message;
+          if (err.error) {
+            // Handle specific error messages
+            if (err.error.includes('overloaded') || err.error.includes('503')) {
+              errMsg = 'Gemini servers are temporarily busy. Please try again in a few minutes.';
+            } else if (err.error.includes('API key')) {
+              errMsg = 'Invalid API key. Please check your Gemini API key.';
+            } else {
+              errMsg = err.error;
+            }
           }
         } catch {}
         setApiKeyError(errMsg);
       }
     } catch (e) {
-      setApiKeyError('Network or CORS error. If this persists, your browser may not be allowed to call Gemini API directly.');
+      setApiKeyError('Network error. Please check your connection and try again.');
     }
   };
 

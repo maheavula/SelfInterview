@@ -5,13 +5,33 @@ service cloud.firestore {
     match /interviewFeedbacks/{document} {
       allow read, write: if request.auth != null && 
         (request.auth.token.email == resource.data.user || 
-         request.auth.token.email == request.resource.data.user);
+         request.auth.token.email == request.resource.data.user) &&
+        // Validate data structure
+        request.resource.data.keys().hasAll(['feedback', 'interviewType', 'timestamp', 'user']) &&
+        request.resource.data.timestamp is timestamp &&
+        request.resource.data.user is string;
     }
     
     // Allow users to read and write their own user profile data
     match /users/{userId} {
       allow read, write: if request.auth != null && 
-        request.auth.uid == userId;
+        request.auth.uid == userId &&
+        // Validate profile data structure
+        request.resource.data.keys().hasAll(['email', 'updatedAt']) &&
+        request.resource.data.email is string &&
+        request.resource.data.updatedAt is timestamp;
+    }
+    
+    // Rate limiting for interview feedbacks (max 10 per hour per user)
+    match /interviewFeedbacks/{document} {
+      allow create: if request.auth != null && 
+        request.auth.token.email == request.resource.data.user &&
+        // Check rate limit
+        getCountFromTime(
+          /databases/$(database)/documents/interviewFeedbacks,
+          request.auth.token.email,
+          duration.value(1, 'h')
+        ) < 10;
     }
     
     // Deny all other access by default

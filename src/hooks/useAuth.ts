@@ -103,13 +103,13 @@ export const useAuth = () => {
       if (!localStorage.getItem(welcomeKey)) {
         try {
           await emailjs.send(
-            'service_46d2uif',
-            'template_0nl7oke',
+            import.meta.env.VITE_EMAILJS_SERVICE_ID,
+            import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
             {
               email: email,
               name: email.split('@')[0],
             },
-            'lFJlQCkrhVYA8b4L3'
+            import.meta.env.VITE_EMAILJS_PUBLIC_KEY
           );
           localStorage.setItem(welcomeKey, 'true');
         } catch (e) {
@@ -178,15 +178,15 @@ export const useAuth = () => {
         const welcomeKey = `welcome_sent_${email}`;
         if (!localStorage.getItem(welcomeKey)) {
           try {
-            await emailjs.send(
-              'service_46d2uif',
-              'template_0nl7oke',
-              {
-                email: email,
-                name: email.split('@')[0],
-              },
-              'lFJlQCkrhVYA8b4L3'
-            );
+                      await emailjs.send(
+            import.meta.env.VITE_EMAILJS_SERVICE_ID,
+            import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
+            {
+              email: email,
+              name: email.split('@')[0],
+            },
+            import.meta.env.VITE_EMAILJS_PUBLIC_KEY
+          );
             localStorage.setItem(welcomeKey, 'true');
           } catch (e) {
             // Optionally log or ignore welcome email errors

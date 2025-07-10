@@ -25,7 +25,7 @@ export const ContactSection = () => {
     setSuccess(false);
     try {
       await emailjs.send(
-        'service_46d2uif',
+        import.meta.env.VITE_EMAILJS_SERVICE_ID,
         'template_5ij2xy6',
         {
           name: `${form.firstName} ${form.lastName}`.trim(),
@@ -34,7 +34,7 @@ export const ContactSection = () => {
           time: new Date().toLocaleString(),
           message: form.message,
         },
-        'lFJlQCkrhVYA8b4L3'
+        import.meta.env.VITE_EMAILJS_PUBLIC_KEY
       );
       setSuccess(true);
       setForm({ firstName: '', lastName: '', email: '', subject: 'General Inquiry', message: '' });
