@@ -20,7 +20,6 @@ export default defineConfig({
         manualChunks: {
           // Separate vendor chunks
           vendor: ['react', 'react-dom'],
-          firebase: ['firebase'],
           ui: ['lucide-react', 'framer-motion'],
           utils: ['html2canvas', 'jspdf', 'pdfjs-dist'],
         },
@@ -40,8 +39,9 @@ export default defineConfig({
   // Optimize dependencies
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom'],
-    exclude: ['firebase'], // Firebase should be loaded dynamically
   },
-  // Enable source maps for development only
-  // sourcemap: false, // Removed as it's not a valid option
+  define: {
+    // Ensure global variables are defined
+    global: 'globalThis',
+  },
 })
