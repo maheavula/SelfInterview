@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { BrainCircuit, UploadCloud, FileText, User, Briefcase, Building2, Layers, ClipboardList } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { sanitizeText, validateAndSanitize, useInputSanitization } from '../utils/sanitization';
 
 const experienceOptions = [
   'Fresher',
@@ -21,6 +22,7 @@ export default function Interview() {
   const [resumeName, setResumeName] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { sanitizeInput, validateInput } = useInputSanitization();
 
   useEffect(() => {
     // Load form data from sessionStorage if available
@@ -49,18 +51,68 @@ export default function Interview() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setForm(f => ({ ...f, [name]: value }));
+    
+    // Sanitize input based on field type
+    let sanitizedValue = value;
+    
+    switch (name) {
+      case 'name':
+      case 'jobRole':
+      case 'company':
+        // Sanitize text inputs
+        sanitizedValue = sanitizeInput(value, 'text');
+        break;
+      case 'jobDescription':
+      case 'resumeText':
+        // Sanitize textarea inputs (remove HTML tags)
+        sanitizedValue = sanitizeText(value);
+        break;
+      case 'experience':
+      case 'interviewType':
+        // For select fields, validate against allowed options
+        const allowedOptions = name === 'experience' ? experienceOptions : interviewTypes;
+        if (!allowedOptions.includes(value)) {
+          sanitizedValue = '';
+        }
+        break;
+      default:
+        // Default sanitization for unknown fields
+        sanitizedValue = sanitizeInput(value, 'text');
+    }
+    
+    setForm(f => ({ ...f, [name]: sanitizedValue }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate and sanitize all form data before submission
+    const validationResults = {
+      name: validateInput(form.name, { type: 'text', required: true, maxLength: 100 }),
+      jobRole: validateInput(form.jobRole, { type: 'text', required: true, maxLength: 100 }),
+      company: validateInput(form.company, { type: 'text', required: false, maxLength: 100 }),
+      jobDescription: validateInput(form.jobDescription, { type: 'textarea', required: false, maxLength: 8000 }),
+      resumeText: validateInput(form.resumeText, { type: 'textarea', required: true, maxLength: 10000 })
+    };
+    
+    // Check for validation errors
+    const errors = Object.entries(validationResults)
+      .filter(([_, result]) => !result.isValid)
+      .map(([field, result]) => `${field}: ${result.error}`)
+      .join(', ');
+    
+    if (errors) {
+      setError(`Please fix the following errors: ${errors}`);
+      return;
+    }
+    
     // Check if resume is uploaded
-    if (!form.resumeText) {
+    if (!form.resumeText.trim()) {
       setError('Please paste your resume text before proceeding.');
       return;
     }
-    // Validation can be added here
-    // For now, just alert and stay on page
+    
+    // All validation passed, proceed to next step
     navigate('/system-check');
   };
 
@@ -84,6 +136,14 @@ export default function Interview() {
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-12 relative z-10 w-full">
         <form onSubmit={handleSubmit} className="w-full max-w-xl mx-auto glass-effect rounded-3xl p-10 flex flex-col items-center text-center shadow-2xl animate-fade-in">
           <h1 className="text-3xl md:text-4xl font-extrabold mb-6 gradient-text drop-shadow-lg">Prepare for Your Interview</h1>
+          
+          {/* Error Display */}
+          {error && (
+            <div className="w-full mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-300 text-sm">
+              {error}
+            </div>
+          )}
+          
           <div className="w-full flex flex-col gap-5">
             {/* Name */}
             <div className="flex items-center gap-3 bg-black/30 rounded-xl px-4 py-3 border border-white/10">
@@ -158,26 +218,36 @@ export default function Interview() {
             {/* Job Description (optional) */}
             <div className="flex items-start gap-3 bg-black/30 rounded-xl px-4 py-3 border border-white/10">
               <FileText className="w-5 h-5 text-indigo-300 mt-1" />
-              <textarea
-                name="jobDescription"
-                className="flex-1 bg-transparent outline-none text-white placeholder-gray-400 text-lg resize-none min-h-[80px] max-h-40"
-                placeholder="Paste Job Description (max 1000 words, optional)"
-                value={form.jobDescription}
-                onChange={handleChange}
-                maxLength={8000} // ~1000 words
-              />
+              <div className="flex-1">
+                <textarea
+                  name="jobDescription"
+                  className="w-full bg-transparent outline-none text-white placeholder-gray-400 text-lg resize-none min-h-[80px] max-h-40"
+                  placeholder="Paste Job Description (max 1000 words, optional)"
+                  value={form.jobDescription}
+                  onChange={handleChange}
+                  maxLength={8000} // ~1000 words
+                />
+                <div className="text-xs text-gray-400 mt-1">
+                  {form.jobDescription.length}/8000 characters
+                </div>
+              </div>
             </div>
             {/* Resume Textarea */}
             <div className="flex items-start gap-3 bg-black/30 rounded-xl px-4 py-3 border border-white/10">
               <FileText className="w-5 h-5 text-indigo-300 mt-1" />
-              <textarea
-                name="resumeText"
-                className="flex-1 bg-transparent outline-none text-white placeholder-gray-400 text-lg resize-none min-h-[80px] max-h-40"
-                placeholder="Paste your resume content including objective section here (required)"
-                value={form.resumeText}
-                onChange={handleChange}
-                required
-              />
+              <div className="flex-1">
+                <textarea
+                  name="resumeText"
+                  className="w-full bg-transparent outline-none text-white placeholder-gray-400 text-lg resize-none min-h-[80px] max-h-40"
+                  placeholder="Paste your resume content including objective section here (required)"
+                  value={form.resumeText}
+                  onChange={handleChange}
+                  required
+                />
+                <div className="text-xs text-gray-400 mt-1">
+                  {form.resumeText.length}/10000 characters
+                </div>
+              </div>
             </div>
           </div>
           <button

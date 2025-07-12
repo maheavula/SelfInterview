@@ -16,14 +16,14 @@ export default function Home() {
     fullName: string;
     graduation: string;
     year: string;
-    phone: string;
+    branch: string;
     experience: string;
     role: string;
   }>({
     fullName: '',
     graduation: '',
     year: '',
-    phone: '',
+    branch: '',
     experience: '',
     role: '',
   });
@@ -60,12 +60,12 @@ export default function Home() {
               fullName: data.fullName || '',
               graduation: data.graduation || '',
               year: data.year || '',
-              phone: data.phone || '',
+              branch: data.branch || '',
               experience: data.experience || '',
               role: data.role || '',
             });
           } else {
-            setProfile({ fullName: '', graduation: '', year: '', phone: '', experience: '', role: '' });
+            setProfile({ fullName: '', graduation: '', year: '', branch: '', experience: '', role: '' });
             setEditMode(true); // If no profile, go straight to edit mode
           }
         } catch (err) {
@@ -94,7 +94,7 @@ export default function Home() {
               fullName: data.fullName || '',
               graduation: data.graduation || '',
               year: data.year || '',
-              phone: data.phone || '',
+              branch: data.branch || '',
               experience: data.experience || '',
               role: data.role || '',
             });
@@ -114,7 +114,7 @@ export default function Home() {
   const handleProfileSave = async () => {
     setError('');
     // Validation
-    if (!profile.fullName || !profile.graduation || !profile.year || !profile.phone || !profile.experience || !profile.role) {
+    if (!profile.fullName || !profile.graduation || !profile.year || !profile.branch || !profile.experience || !profile.role) {
       setError('Please fill in all fields.');
       return;
     }
@@ -299,7 +299,7 @@ export default function Home() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div ref={modalRef} className="bg-gray-900/90 border border-white/10 rounded-3xl shadow-2xl p-8 w-full max-w-lg relative">
               <h2 className="text-2xl font-bold gradient-text mb-6 text-center">
-                {editMode || (!profile.fullName && !profile.graduation && !profile.year && !profile.phone && !profile.experience && !profile.role)
+                {editMode || (!profile.fullName && !profile.graduation && !profile.year && !profile.branch && !profile.experience && !profile.role)
                   ? 'Complete Your Profile'
                   : 'Profile Details'}
               </h2>
@@ -320,7 +320,7 @@ export default function Home() {
                   <input type="text" placeholder="Graduation (e.g. B.Tech, B.Sc)" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.graduation} onChange={e => setProfile(p => ({ ...p, graduation: e.target.value }))} />
                   <input type="text" placeholder="Year of Passing" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.year} onChange={e => setProfile(p => ({ ...p, year: e.target.value }))} />
                   <input type="email" placeholder="Email" className="rounded-lg px-4 py-2 bg-gray-800 text-gray-400 cursor-not-allowed" value={email} readOnly />
-                  <input type="tel" placeholder="Phone Number" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} />
+                  <input type="text" placeholder="Branch (e.g. CSE, ECE)" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.branch} onChange={e => setProfile(p => ({ ...p, branch: e.target.value }))} />
                   <select className="rounded-lg px-4 py-2 bg-black/40 text-white focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.experience} onChange={e => setProfile(p => ({ ...p, experience: e.target.value }))}>
                     <option value="">Experience Level</option>
                     <option value="Fresher">Fresher</option>
@@ -356,7 +356,7 @@ export default function Home() {
                     </div>
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-800/60">
                       <span className="text-sky-300 font-semibold"><svg className="w-5 h-5 inline" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M16 2a2 2 0 012 2v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2h8z" /></svg></span>
-                      <span className="text-sm"><span className="font-semibold text-gray-300">Phone:</span> {profile.phone}</span>
+                      <span className="text-sm"><span className="font-semibold text-gray-300">Branch:</span> {profile.branch}</span>
                     </div>
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-800/60">
                       <span className="text-violet-300 font-semibold"><svg className="w-5 h-5 inline" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 17v-2a4 4 0 014-4h0a4 4 0 014 4v2" /><circle cx="12" cy="7" r="4" /></svg></span>

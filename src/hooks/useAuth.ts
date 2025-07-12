@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -10,7 +10,6 @@ import {
   User
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase';
-import emailjs from '@emailjs/browser';
 
 // Domain restrictions - you can customize this list
 const ALLOWED_DOMAINS = [
@@ -43,8 +42,13 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Optimize auth state listener
   useEffect(() => {
+    let mounted = true;
+    
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!mounted) return;
+      
       setUser(user);
       // Set user email in sessionStorage for interview feedback tracking
       if (user?.email) {
@@ -55,11 +59,14 @@ export const useAuth = () => {
       setLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
-  // Validate email domain
-  const validateEmailDomain = (email: string): { isValid: boolean; message?: string } => {
+  // Memoize email validation
+  const validateEmailDomain = useCallback((email: string): { isValid: boolean; message?: string } => {
     const domain = email.split('@')[1]?.toLowerCase();
     
     if (!domain) {
@@ -77,9 +84,10 @@ export const useAuth = () => {
     }
 
     return { isValid: true };
-  };
+  }, []);
 
-  const login = async (email: string, password: string) => {
+  // Optimize login function
+  const login = useCallback(async (email: string, password: string) => {
     try {
       setError(null);
       setLoading(true);
@@ -98,24 +106,7 @@ export const useAuth = () => {
         throw new Error('Please verify your email address before logging in. Check your inbox for a verification link.');
       }
 
-      // Send welcome email only after first verified login
-      const welcomeKey = `welcome_sent_${email}`;
-      if (!localStorage.getItem(welcomeKey)) {
-        try {
-          await emailjs.send(
-            import.meta.env.VITE_EMAILJS_SERVICE_ID,
-            import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
-            {
-              email: email,
-              name: email.split('@')[0],
-            },
-            import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-          );
-          localStorage.setItem(welcomeKey, 'true');
-        } catch (e) {
-          // Optionally log or ignore welcome email errors
-        }
-      }
+      // Welcome email removed - now only used for feedback notifications
 
       return result.user;
     } catch (err: any) {
@@ -124,9 +115,10 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateEmailDomain]);
 
-  const signup = async (email: string, password: string) => {
+  // Optimize signup function
+  const signup = useCallback(async (email: string, password: string) => {
     try {
       setError(null);
       setLoading(true);
@@ -157,9 +149,10 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateEmailDomain]);
 
-  const loginWithGoogle = async () => {
+  // Optimize Google login
+  const loginWithGoogle = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
@@ -174,24 +167,7 @@ export const useAuth = () => {
           await signOut(auth);
           throw new Error(domainValidation.message);
         }
-        // Send welcome email only after first Google login
-        const welcomeKey = `welcome_sent_${email}`;
-        if (!localStorage.getItem(welcomeKey)) {
-          try {
-                      await emailjs.send(
-            import.meta.env.VITE_EMAILJS_SERVICE_ID,
-            import.meta.env.VITE_EMAILJS_TEMPLATE_ID,
-            {
-              email: email,
-              name: email.split('@')[0],
-            },
-            import.meta.env.VITE_EMAILJS_PUBLIC_KEY
-          );
-            localStorage.setItem(welcomeKey, 'true');
-          } catch (e) {
-            // Optionally log or ignore welcome email errors
-          }
-        }
+        // Welcome email removed - now only used for feedback notifications
       }
       
       return result.user;
@@ -201,9 +177,10 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateEmailDomain]);
 
-  const logout = async () => {
+  // Optimize logout function
+  const logout = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
@@ -214,9 +191,10 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const resendVerificationEmail = async () => {
+  // Optimize resend verification
+  const resendVerificationEmail = useCallback(async () => {
     try {
       setError(null);
       if (user && !user.emailVerified) {
@@ -227,9 +205,10 @@ export const useAuth = () => {
       setError(err.message);
       throw err;
     }
-  };
+  }, [user]);
 
-  const resetPassword = async (email: string) => {
+  // Optimize password reset
+  const resetPassword = useCallback(async (email: string) => {
     try {
       setError(null);
       setLoading(true);
@@ -248,7 +227,7 @@ export const useAuth = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [validateEmailDomain]);
 
   return {
     user,
@@ -259,6 +238,6 @@ export const useAuth = () => {
     loginWithGoogle,
     logout,
     resendVerificationEmail,
-    resetPassword
+    resetPassword,
   };
 }; 

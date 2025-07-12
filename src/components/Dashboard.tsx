@@ -1,9 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { BrainCircuit, User, LayoutGrid, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { setDoc, doc, getDoc, collection, query, where, getDocs, orderBy, deleteDoc } from 'firebase/firestore';
+import Feedback from './Feedback';
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -14,14 +15,14 @@ export default function Dashboard() {
     fullName: string;
     graduation: string;
     year: string;
-    phone: string;
+    branch: string;
     experience: string;
     role: string;
   }>({
     fullName: '',
     graduation: '',
     year: '',
-    phone: '',
+    branch: '',
     experience: '',
     role: '',
   });
@@ -58,12 +59,12 @@ export default function Dashboard() {
               fullName: data.fullName || '',
               graduation: data.graduation || '',
               year: data.year || '',
-              phone: data.phone || '',
+              branch: data.branch || '',
               experience: data.experience || '',
               role: data.role || '',
             });
           } else {
-            setProfile({ fullName: '', graduation: '', year: '', phone: '', experience: '', role: '' });
+            setProfile({ fullName: '', graduation: '', year: '', branch: '', experience: '', role: '' });
             setEditMode(true); // If no profile, go straight to edit mode
           }
         } catch (err) {
@@ -81,7 +82,7 @@ export default function Dashboard() {
   // Save handler
   const handleProfileSave = async () => {
     setError('');
-    if (!profile.fullName || !profile.graduation || !profile.year || !profile.phone || !profile.experience || !profile.role) {
+    if (!profile.fullName || !profile.graduation || !profile.year || !profile.branch || !profile.experience || !profile.role) {
       setError('Please fill in all fields.');
       return;
     }
@@ -153,6 +154,9 @@ export default function Dashboard() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 7;
 
   // Helper function to get interview type from various sources
   const getInterviewType = (item: any) => {
@@ -170,6 +174,15 @@ export default function Dashboard() {
     }
     return 'N/A';
   };
+
+  // Check if user just completed an interview and should see feedback
+  useEffect(() => {
+    const shouldShowFeedback = sessionStorage.getItem('showFeedbackModal');
+    if (shouldShowFeedback === 'true') {
+      setShowFeedback(true);
+      sessionStorage.removeItem('showFeedbackModal');
+    }
+  }, []);
 
   // Fetch interview history on mount
   React.useEffect(() => {
@@ -233,6 +246,8 @@ export default function Dashboard() {
         console.log('Filtered feedbacks for user:', filteredData);
         console.log('Deduplicated feedbacks:', deduplicatedData);
         setInterviewHistory(deduplicatedData);
+        // Reset to first page when history changes
+        setCurrentPage(0);
       } catch (err) {
         console.error('Failed to fetch interview history:', err);
       } finally {
@@ -282,7 +297,7 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div ref={modalRef} className="bg-gray-900/90 border border-white/10 rounded-3xl shadow-2xl p-8 w-full max-w-lg relative">
             <h2 className="text-2xl font-bold gradient-text mb-6 text-center">
-              {editMode || (!profile.fullName && !profile.graduation && !profile.year && !profile.phone && !profile.experience && !profile.role)
+              {editMode || (!profile.fullName && !profile.graduation && !profile.year && !profile.branch && !profile.experience && !profile.role)
                 ? 'Complete Your Profile'
                 : 'Profile Details'}
             </h2>
@@ -303,7 +318,7 @@ export default function Dashboard() {
                 <input type="text" placeholder="Graduation (e.g. B.Tech, B.Sc)" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.graduation} onChange={e => setProfile(p => ({ ...p, graduation: e.target.value }))} />
                 <input type="text" placeholder="Year of Passing" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.year} onChange={e => setProfile(p => ({ ...p, year: e.target.value }))} />
                 <input type="email" placeholder="Email" className="rounded-lg px-4 py-2 bg-gray-800 text-gray-400 cursor-not-allowed" value={email} readOnly />
-                <input type="tel" placeholder="Phone Number" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.phone} onChange={e => setProfile(p => ({ ...p, phone: e.target.value }))} />
+                <input type="text" placeholder="Branch (e.g. CSE, ECE)" className="rounded-lg px-4 py-2 bg-black/40 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.branch} onChange={e => setProfile(p => ({ ...p, branch: e.target.value }))} />
                 <select className="rounded-lg px-4 py-2 bg-black/40 text-white focus:outline-none focus:ring-2 focus:ring-sky-400" value={profile.experience} onChange={e => setProfile(p => ({ ...p, experience: e.target.value }))}>
                   <option value="">Experience Level</option>
                   <option value="Fresher">Fresher</option>
@@ -339,7 +354,7 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-800/60">
                     <span className="text-sky-300 font-semibold"><svg className="w-5 h-5 inline" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M16 2a2 2 0 012 2v16a2 2 0 01-2 2H8a2 2 0 01-2-2V4a2 2 0 012-2h8z" /></svg></span>
-                    <span className="text-sm"><span className="font-semibold text-gray-300">Phone:</span> {profile.phone}</span>
+                    <span className="text-sm"><span className="font-semibold text-gray-300">Branch:</span> {profile.branch}</span>
                   </div>
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-gray-800/60">
                     <span className="text-violet-300 font-semibold"><svg className="w-5 h-5 inline" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M9 17v-2a4 4 0 014-4h0a4 4 0 014 4v2" /><circle cx="12" cy="7" r="4" /></svg></span>
@@ -383,9 +398,11 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="text-white">
-                    {interviewHistory.map((item, idx) => (
+                    {interviewHistory
+                      .slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage)
+                      .map((item, idx) => (
                       <tr key={item.id} className="border-b border-white/10 hover:bg-gray-800/40 transition">
-                        <td className="px-4 py-3 text-gray-200">{idx + 1}</td>
+                        <td className="px-4 py-3 text-gray-200">{currentPage * itemsPerPage + idx + 1}</td>
                         <td className="px-4 py-3 text-sky-300 font-medium">{getInterviewType(item)}</td>
                         <td className="px-4 py-3 text-gray-300">{item.timestamp ? new Date(item.timestamp).toLocaleString() : 'N/A'}</td>
                         <td className="px-4 py-3">
@@ -415,6 +432,34 @@ export default function Dashboard() {
                     ))}
                   </tbody>
                 </table>
+                
+                {/* Pagination Controls */}
+                {interviewHistory.length > itemsPerPage && (
+                  <div className="flex items-center justify-between px-4 py-3 bg-gray-800/40 border-t border-white/10">
+                    <div className="text-sm text-gray-300">
+                      Showing {currentPage * itemsPerPage + 1} to {Math.min((currentPage + 1) * itemsPerPage, interviewHistory.length)} of {interviewHistory.length} interviews
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                        disabled={currentPage === 0}
+                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-white text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
+                      >
+                        ← Previous
+                      </button>
+                      <span className="text-sm text-gray-300 px-2">
+                        {currentPage + 1} of {Math.ceil(interviewHistory.length / itemsPerPage)}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(interviewHistory.length / itemsPerPage) - 1, prev + 1))}
+                        disabled={currentPage >= Math.ceil(interviewHistory.length / itemsPerPage) - 1}
+                        className="px-3 py-1.5 rounded-lg bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 text-white text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -478,7 +523,7 @@ export default function Dashboard() {
               )}
 
               {/* Overall Scores */}
-              {(selectedFeedback.overallScore || selectedFeedback.communicationScore || selectedFeedback.technicalScore) && (
+              {(selectedFeedback.overallScore || selectedFeedback.communicationScore || selectedFeedback.technicalScore || selectedFeedback.logicalScore || selectedFeedback.behavioralScore) && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   {selectedFeedback.overallScore && (
                     <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 rounded-xl p-4 border border-indigo-500/30">
@@ -496,14 +541,35 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
-                  {selectedFeedback.technicalScore && (
-                    <div className="bg-gradient-to-br from-purple-600/20 to-violet-600/20 rounded-xl p-4 border border-purple-500/30">
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-purple-300">{selectedFeedback.technicalScore}/100</div>
-                        <div className="text-sm text-gray-300">Technical</div>
-                      </div>
-                    </div>
-                  )}
+                  {/* Show appropriate score based on interview type */}
+                  {(() => {
+                    const interviewType = selectedFeedback.userInputs?.interviewType || selectedFeedback.interviewType || '';
+                    const isHRorManagerial = interviewType.toLowerCase().includes('hr') || 
+                                           interviewType.toLowerCase().includes('behavioral') || 
+                                           interviewType.toLowerCase().includes('managerial');
+                    
+                    if (isHRorManagerial) {
+                      // For HR/Behavioral/Managerial interviews, show logical & behavioral score
+                      return selectedFeedback.logicalBehavioralScore && (
+                        <div className="bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-xl p-4 border border-emerald-500/30">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-emerald-300">{selectedFeedback.logicalBehavioralScore}/100</div>
+                            <div className="text-sm text-gray-300">Logical & Behavioral</div>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      // For technical interviews, show technical score
+                      return selectedFeedback.technicalScore && (
+                        <div className="bg-gradient-to-br from-purple-600/20 to-violet-600/20 rounded-xl p-4 border border-purple-500/30">
+                          <div className="text-center">
+                            <div className="text-3xl font-bold text-purple-300">{selectedFeedback.technicalScore}/100</div>
+                            <div className="text-sm text-gray-300">Technical</div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })()}
                 </div>
               )}
 
@@ -654,6 +720,11 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Feedback Modal */}
+      {showFeedback && (
+        <Feedback onClose={() => setShowFeedback(false)} />
       )}
     </div>
   );

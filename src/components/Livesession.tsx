@@ -6,7 +6,7 @@ import robotAnimation from "../assets/robot.json";
 import meninterviewAnimation from "../assets/meninterview.json";
 import childboyAnimation from "../assets/childboy.json";
 import interviewerAnimation from "../assets/interviewer.json";
-import { addDoc, collection } from "firebase/firestore";
+import { addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from '../hooks/useAuth';
 import { API_ENDPOINTS } from '../config/api';
@@ -35,6 +35,7 @@ export default function Livesession() {
   // Add at the top with other useState imports
   const [feedbackData, setFeedbackData] = useState<any>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [isAnswering, setIsAnswering] = useState(false);
 
   // Fullscreen functionality
   const enterFullscreen = async () => {
@@ -187,6 +188,18 @@ export default function Livesession() {
     const answeredPairs = questions
       .map((q, i) => ({ question: q, answer: answers[i] }))
       .filter(pair => pair.answer && pair.answer.trim().length > 0);
+    
+    // Check if user provided any answers
+    if (answeredPairs.length === 0) {
+      setFeedbackData({ 
+        error: 'No answers provided during the interview session. Please try again and provide responses to the questions.' 
+      });
+      setShowFeedback(true);
+      setIsFeedbackLoading(false);
+      setIsProcessingFeedback(false);
+      return;
+    }
+    
     try {
       const feedback = await generateInterviewFeedback(
         answeredPairs.map(p => p.question),
@@ -286,14 +299,20 @@ export default function Livesession() {
     if (!answerTimerStarted) return;
     if (answerTimeLeft <= 0) {
       // Auto move to next question when timer expires
-      handleNextQuestion();
+      // Only auto-advance if user is actively answering
+      if (isAnswering) {
+        handleNextQuestion();
+      } else {
+        // Just stop the timer if user is not answering
+        setAnswerTimerStarted(false);
+      }
       return;
     }
     const interval = setInterval(() => {
       setAnswerTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, [answerTimerStarted, answerTimeLeft]);
+  }, [answerTimerStarted, answerTimeLeft, isAnswering]);
 
   useEffect(() => {
     // Request webcam access
@@ -339,7 +358,11 @@ export default function Livesession() {
     extraNote?: string;
   }
 
-  function buildGeminiPrompt({ interviewType, company, name, graduation, role, experience, jobDescription, resumeText, extraNote }: InterviewUserData & { extraNote?: string }) {
+  function buildGeminiPrompt({ interviewType, company, name, graduation, role, experience, jobDescription, resumeText, extraNote, sessionCount = 0 }: InterviewUserData & { extraNote?: string; sessionCount?: number }) {
+    const difficultyNote = sessionCount >= 5 ? 
+      `\n\nIMPORTANT: This candidate has completed ${sessionCount} previous ${interviewType} interview sessions. Please generate more challenging and advanced questions appropriate for an experienced candidate. Focus on complex scenarios, leadership challenges, crisis management, advanced behavioral situations, and sophisticated problem-solving scenarios.` : 
+      '';
+
     return `You are acting as a mock interviewer for a candidate preparing for an interview. The candidate's name is ${name}, and they are a ${graduation} graduate with ${experience} experience. They are applying for the role of ${role} at ${company}. The type of interview you are conducting is: ${interviewType}.
 
 Please tailor your questions based on the interview type:
@@ -364,11 +387,34 @@ Important Instructions:
 - Focus on real-world, resume-based, and role-relevant questions that freshers or junior professionals can reasonably answer.
 - Make the questions sound like a calm, helpful, and curious human interviewer would ask — avoid robotic or scripted tone.
 - Don't label the questions with difficulty or type.
-- At the end, return only the list of interview questions, one per line, and nothing else. Do not include any extra explanation, headings, or notes.${extraNote ? '\n' + extraNote : ''}`;
+- At the end, return only the list of interview questions, one per line, and nothing else. Do not include any extra explanation, headings, or notes.${extraNote ? '\n' + extraNote : ''}${difficultyNote}`;
+  }
+
+  // Function to get user's completed interview sessions count
+  async function getCompletedSessionsCount(interviewType: string): Promise<number> {
+    try {
+      const userEmail = sessionStorage.getItem('userEmail') || '';
+      if (!userEmail) return 0;
+      
+      const q = query(
+        collection(db, 'interviewFeedbacks'),
+        where('user', '==', userEmail),
+        where('interviewType', '==', interviewType)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.size;
+    } catch (error) {
+      console.error('Error getting completed sessions count:', error);
+      return 0;
+    }
   }
 
   // Function to build continuation questions prompt (no introductory questions)
-  function buildContinuationPrompt({ interviewType, company, name, graduation, role, experience, jobDescription, resumeText }: InterviewUserData) {
+  function buildContinuationPrompt({ interviewType, company, name, graduation, role, experience, jobDescription, resumeText, sessionCount = 0 }: InterviewUserData & { sessionCount?: number }) {
+    const difficultyNote = sessionCount >= 5 ? 
+      `\n\nIMPORTANT: This candidate has completed ${sessionCount} previous ${interviewType} interview sessions. Please generate more challenging and advanced questions appropriate for an experienced candidate. Focus on complex scenarios, leadership challenges, crisis management, advanced behavioral situations, and sophisticated problem-solving scenarios.` : 
+      '';
+
     return `You are continuing a mock interview session. The candidate's name is ${name}, and they are a ${graduation} graduate with ${experience} experience. They are applying for the role of ${role} at ${company}. The type of interview is: ${interviewType}.
 
 The candidate has already answered several questions and we need to continue with fresh questions. Please generate NEW questions that are different from typical introductory questions.
@@ -404,12 +450,16 @@ Important Instructions:
 - Make questions specific to the candidate's background and role
 - Avoid repetition of common basic questions
 - Keep questions relevant to the interview type
-- Return only the list of questions, one per line, no explanations or formatting`;
+- Return only the list of questions, one per line, no explanations or formatting${difficultyNote}`;
   }
 
   // Function to call Gemini API and generate questions
   async function generateInterviewQuestions(userData: InterviewUserData) {
-    const prompt = buildGeminiPrompt(userData);
+    // Get completed sessions count for this interview type
+    const sessionCount = await getCompletedSessionsCount(userData.interviewType);
+    console.log(`Completed ${sessionCount} sessions for ${userData.interviewType} interviews`);
+    
+    const prompt = buildGeminiPrompt({ ...userData, sessionCount });
     const userApiKey = sessionStorage.getItem('geminiApiKey');
     if (!userApiKey) {
       throw new Error('API key not found. Please configure your API key first.');
@@ -450,6 +500,7 @@ Important Instructions:
   // State for loading and error
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [questionError, setQuestionError] = useState('');
+  const [sessionCount, setSessionCount] = useState<number>(0);
 
   // On mount, if no questions, call Gemini API to generate them
   useEffect(() => {
@@ -462,23 +513,28 @@ Important Instructions:
     try { form = JSON.parse(formRaw); } catch (e: any) { return; }
     setLoadingQuestions(true);
     setQuestionError('');
-    generateInterviewQuestions({
-      interviewType: form.interviewType,
-      company: form.company,
-      name: form.name,
-      graduation: form.graduation || '',
-      role: form.jobRole,
-      experience: form.experience,
-      jobDescription: form.jobDescription,
-      resumeText: form.resumeText || ''
-    })
+    
+    // Get session count and generate questions
+    getCompletedSessionsCount(form.interviewType)
+      .then(count => {
+        setSessionCount(count);
+        return generateInterviewQuestions({
+          interviewType: form.interviewType,
+          company: form.company,
+          name: form.name,
+          graduation: form.graduation || '',
+          role: form.jobRole,
+          experience: form.experience,
+          jobDescription: form.jobDescription,
+          resumeText: form.resumeText || ''
+        });
+      })
       .then(qs => setQuestions(qs))
       .catch(err => setQuestionError(err.message))
       .finally(() => setLoadingQuestions(false));
   }, [apiKey, questions.length]);
 
   // TTS: Speech-to-Text logic
-  const [isAnswering, setIsAnswering] = useState(false);
   const [transcript, setTranscript] = useState('');
   const recognitionRef = useRef<any>(null);
 
@@ -585,7 +641,11 @@ Important Instructions:
 
   // Function to generate continuation questions (no introductory questions)
   async function generateContinuationQuestions(userData: InterviewUserData) {
-    const prompt = buildContinuationPrompt(userData);
+    // Get completed sessions count for this interview type
+    const sessionCount = await getCompletedSessionsCount(userData.interviewType);
+    console.log(`Completed ${sessionCount} sessions for ${userData.interviewType} interviews (continuation)`);
+    
+    const prompt = buildContinuationPrompt({ ...userData, sessionCount });
     const userApiKey = sessionStorage.getItem('geminiApiKey');
     if (!userApiKey) {
       throw new Error('API key not found. Please configure your API key first.');
@@ -652,30 +712,100 @@ Important Instructions:
   };
 
   async function generateInterviewFeedback(questions: string[], answers: string[]) {
-    const prompt = `
-You are acting as an AI interview evaluator. The user has completed a mock interview session. During the session, the following data was collected:
+    // Get interview type from sessionStorage
+    const formRaw = sessionStorage.getItem('interviewForm');
+    let interviewType = 'Technical';
+    if (formRaw) {
+      try {
+        const form = JSON.parse(formRaw);
+        interviewType = form.interviewType || 'Technical';
+      } catch (e) {
+        console.error('Error parsing interview form:', e);
+      }
+    }
+
+    // Create different prompts based on interview type
+    let prompt = '';
+    let jsonStructure = '';
+
+    if (interviewType === 'HR' || interviewType === 'Behavioral') {
+      // HR and Behavioral interviews - focus on soft skills, no technical scores
+      prompt = `
+You are acting as an AI interview evaluator for an ${interviewType} interview. The user has completed a mock interview session. During the session, the following data was collected:
 
 - A series of interview questions presented to the candidate
 - Transcribed answers spoken by the candidate in response to each question
 
-Now, your task is to analyze and evaluate the interview session in detail. For each question-answer pair, provide a structured and clear evaluation based on the following metrics:
+IMPORTANT: Only analyze the question-answer pairs provided below. Do NOT analyze questions that the user did not answer. Do NOT make up or assume answers for questions that were not answered by the user.
+
+Now, your task is to analyze and evaluate ONLY the answered questions in detail. For each question-answer pair provided, provide a structured and clear evaluation based on the following metrics:
+
+1. Individual Communication Score: (Scale of 1 to 10)
+2. Fluency & Grammar Comments:
+3. Behavioral Relevance Comment:
+
+Do this for each individual question and response that was actually answered.
+
+After you finish evaluating all answered question-answer pairs, also provide a final overall interview summary, including:
+
+- Overall Score (Scale of 1 to 100)
+- Overall Communication Score (0–100)
+- Overall Logical & Behavioral Score (0–100) - Combined score for logical thinking and behavioral responses
+- General feedback or suggestions to improve their overall performance (list all suggestions at the end, not per question).
+
+Here is the data (only questions that were answered):
+${questions.map((q, i) => `Q${i+1}: ${q}\nA${i+1}: ${answers[i]}`).join('\n\n')}
+
+Please return the full output as a valid JSON object structured like this:
+
+{
+  "overallScore": 85,
+  "communicationScore": 88,
+  "logicalBehavioralScore": 82,
+  "interviewSummary": "Short paragraph summary...",
+  "overallSuggestions": ["...", "..."],
+  "questions": [
+    {
+      "question": "Tell me about a challenging situation you faced.",
+      "answer": "User's full transcribed answer...",
+      "communicationScore": 8,
+      "fluencyComment": "Spoke fluently with a few hesitations.",
+      "behavioralComment": "Demonstrated good problem-solving approach."
+    }
+  ]
+}
+
+Note: Only include questions that were actually answered by the user. Do not include questions that were not answered.
+
+IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explanation, markdown, or formatting. Do NOT use triple backticks. Do NOT add any text before or after the JSON. The response must be a valid JSON object only.`;
+    } else {
+      // Technical interviews - include technical scores
+      prompt = `
+You are acting as an AI interview evaluator for a Technical interview. The user has completed a mock interview session. During the session, the following data was collected:
+
+- A series of interview questions presented to the candidate
+- Transcribed answers spoken by the candidate in response to each question
+
+IMPORTANT: Only analyze the question-answer pairs provided below. Do NOT analyze questions that the user did not answer. Do NOT make up or assume answers for questions that were not answered by the user.
+
+Now, your task is to analyze and evaluate ONLY the answered questions in detail. For each question-answer pair provided, provide a structured and clear evaluation based on the following metrics:
 
 1. Individual Communication Score: (Scale of 1 to 10)
 2. Individual Technical Score: (Scale of 1 to 10)
 3. Fluency & Grammar Comments:
 4. Technical Relevance Comment:
 
-Do this for each individual question and response.
+Do this for each individual question and response that was actually answered.
 
-After you finish evaluating all question-answer pairs, also provide a final overall interview summary, including:
+After you finish evaluating all answered question-answer pairs, also provide a final overall interview summary, including:
 
 - Overall Score (Scale of 1 to 100)
 - Overall Communication Score (0–100)
 - Overall Technical Score (0–100)
 - General feedback or suggestions to improve their overall performance (list all suggestions at the end, not per question).
 
-Here is the data:
-${questions.map((q, i) => `Q${i+1}: ${q}\nA${i+1}: ${answers[i] || ""}`).join('\n\n')}
+Here is the data (only questions that were answered):
+${questions.map((q, i) => `Q${i+1}: ${q}\nA${i+1}: ${answers[i]}`).join('\n\n')}
 
 Please return the full output as a valid JSON object structured like this:
 
@@ -697,7 +827,10 @@ Please return the full output as a valid JSON object structured like this:
   ]
 }
 
+Note: Only include questions that were actually answered by the user. Do not include questions that were not answered.
+
 IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explanation, markdown, or formatting. Do NOT use triple backticks. Do NOT add any text before or after the JSON. The response must be a valid JSON object only.`;
+    }
     
     const userApiKey = sessionStorage.getItem('geminiApiKey');
     if (!userApiKey) {
@@ -770,6 +903,18 @@ IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explana
               </svg>
               <span>Live Session</span>
             </div>
+            {sessionCount > 0 && (
+              <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-blue-600/20 rounded-full border border-blue-500/30">
+                <span className="text-xs text-blue-300">
+                  {sessionCount} previous {interviewType} sessions completed
+                </span>
+                {sessionCount >= 5 && (
+                  <span className="text-xs text-yellow-300 font-bold">
+                    • Advanced Mode
+                  </span>
+                )}
+              </div>
+            )}
           </span>
           <button
             className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all font-semibold shadow focus:outline-none ${
@@ -878,19 +1023,27 @@ IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explana
         <div className="w-full max-w-4xl mx-auto flex flex-row justify-end gap-4 mt-2">
           {!isAnswering ? (
             <button
-              className="px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-500 via-sky-400 to-purple-500 shadow-md transition-all duration-300 focus:outline-none hover:scale-105 hover:shadow-purple-500/40"
+              className={`px-6 py-3 rounded-xl font-bold shadow-md transition-all duration-300 focus:outline-none ${
+                isSessionEnded || loadingQuestions
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'text-white bg-gradient-to-r from-indigo-500 via-sky-400 to-purple-500 hover:scale-105 hover:shadow-purple-500/40'
+              }`}
               onClick={startSTT}
               type="button"
-              disabled={isSessionEnded}
+              disabled={isSessionEnded || loadingQuestions}
             >
               Start Answering
             </button>
           ) : (
             <button
-              className="px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-red-500 via-pink-400 to-purple-500 shadow-md transition-all duration-300 focus:outline-none hover:scale-105 hover:shadow-red-500/40"
+              className={`px-6 py-3 rounded-xl font-bold shadow-md transition-all duration-300 focus:outline-none ${
+                isSessionEnded || loadingQuestions
+                  ? 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  : 'text-white bg-gradient-to-r from-red-500 via-pink-400 to-purple-500 hover:scale-105 hover:shadow-red-500/40'
+              }`}
               onClick={stopSTT}
               type="button"
-              disabled={isSessionEnded}
+              disabled={isSessionEnded || loadingQuestions}
             >
               Stop Answering
             </button>
@@ -946,6 +1099,16 @@ IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explana
                 <svg className="animate-spin h-10 w-10 text-blue-600 mb-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
                 <div className="text-lg font-semibold text-blue-700">Generating your feedback summary...</div>
               </div>
+            ) : feedbackData.error ? (
+              <div className="flex flex-col items-center mb-8">
+                <div className="flex items-center gap-3 mb-4">
+                  <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
+                  <h2 className="text-2xl font-extrabold text-red-700">No Feedback Available</h2>
+                </div>
+                <div className="text-red-600 text-center max-w-xl bg-red-50 p-4 rounded-xl border border-red-200">
+                  {feedbackData.error}
+                </div>
+              </div>
             ) : (
               <div className="flex flex-col items-center mb-8">
                 {/* AI Disclaimer */}
@@ -971,68 +1134,82 @@ IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explana
                 <div className="text-gray-600 text-center max-w-xl">{feedbackData.interviewSummary}</div>
               </div>
             )}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
-                <span className="text-lg font-semibold text-gray-700 mb-1">Overall Score</span>
-                <span className="text-3xl font-bold text-blue-700">{feedbackData.overallScore}</span>
-              </div>
-              <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
-                <span className="text-lg font-semibold text-gray-700 mb-1">Communication</span>
-                <span className="text-3xl font-bold text-blue-700">{feedbackData.communicationScore}</span>
-              </div>
-              <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
-                <span className="text-lg font-semibold text-gray-700 mb-1">Technical</span>
-                <span className="text-3xl font-bold text-blue-700">{feedbackData.technicalScore}</span>
-              </div>
-            </div>
-            <div className="mb-8">
-              <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
-                Question-by-Question Feedback
-              </h3>
-              <div className="space-y-6">
-                {feedbackData.questions && feedbackData.questions.map((qf: any, idx: number) => (
-                  <div key={idx} className="bg-white border border-blue-100 rounded-xl shadow p-5">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="text-base font-semibold text-blue-700">Q{idx+1}:</span>
-                      <span className="text-base font-medium text-gray-800">{qf.question}</span>
-                    </div>
-                    <div className="mb-2">
-                      <span className="font-semibold text-gray-600">Your Answer:</span>
-                      <span className="ml-2 text-gray-800">{qf.answer}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 mb-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-gray-500">Communication</span>
-                        <span className="inline-block bg-blue-100 text-blue-700 font-bold rounded-full px-3 py-1 text-sm">{qf.communicationScore}/10</span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm text-gray-500">Technical</span>
-                        <span className="inline-block bg-blue-100 text-blue-700 font-bold rounded-full px-3 py-1 text-sm">{qf.technicalScore}/10</span>
-                      </div>
-                    </div>
-                    <div className="mb-1 text-gray-700">
-                      <span className="font-semibold">Fluency & Grammar:</span> {qf.fluencyComment}
-                    </div>
-                    <div className="mb-1 text-gray-700">
-                      <span className="font-semibold">Technical Relevance:</span> {qf.techComment}
-                    </div>
+            {!feedbackData.error && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                  <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
+                    <span className="text-lg font-semibold text-gray-700 mb-1">Overall Score</span>
+                    <span className="text-3xl font-bold text-blue-700">{feedbackData.overallScore}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-            {feedbackData.overallSuggestions && feedbackData.overallSuggestions.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-                  <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
-                  Overall Suggestions to Improve
-                </h3>
-                <ul className="list-disc ml-8 text-gray-700">
-                  {feedbackData.overallSuggestions.map((s: string, i: number) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
-              </div>
+                  <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
+                    <span className="text-lg font-semibold text-gray-700 mb-1">Communication</span>
+                    <span className="text-3xl font-bold text-blue-700">{feedbackData.communicationScore}</span>
+                  </div>
+                  <div className="bg-blue-50 rounded-xl p-4 flex flex-col items-center shadow">
+                    <span className="text-lg font-semibold text-gray-700 mb-1">
+                      {interviewType === 'HR' || interviewType === 'Behavioral' ? 'Logical & Behavioral' : 'Technical'}
+                    </span>
+                    <span className="text-3xl font-bold text-blue-700">
+                      {interviewType === 'HR' || interviewType === 'Behavioral' ? feedbackData.logicalBehavioralScore : feedbackData.technicalScore}
+                    </span>
+                  </div>
+                </div>
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
+                    Question-by-Question Feedback
+                  </h3>
+                  <div className="space-y-6">
+                    {feedbackData.questions && feedbackData.questions.map((qf: any, idx: number) => (
+                      <div key={idx} className="bg-white border border-blue-100 rounded-xl shadow p-5">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="text-base font-semibold text-blue-700">Q{idx+1}:</span>
+                          <span className="text-base font-medium text-gray-800">{qf.question}</span>
+                        </div>
+                        <div className="mb-2">
+                          <span className="font-semibold text-gray-600">Your Answer:</span>
+                          <span className="ml-2 text-gray-800">{qf.answer}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-4 mb-2">
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm text-gray-500">Communication</span>
+                            <span className="inline-block bg-blue-100 text-blue-700 font-bold rounded-full px-3 py-1 text-sm">{qf.communicationScore}/10</span>
+                          </div>
+                          {interviewType !== 'HR' && interviewType !== 'Behavioral' && qf.technicalScore && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-sm text-gray-500">Technical</span>
+                              <span className="inline-block bg-blue-100 text-blue-700 font-bold rounded-full px-3 py-1 text-sm">
+                                {qf.technicalScore}/10
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="mb-1 text-gray-700">
+                          <span className="font-semibold">Fluency & Grammar:</span> {qf.fluencyComment}
+                        </div>
+                        <div className="mb-1 text-gray-700">
+                          <span className="font-semibold">
+                            {interviewType === 'HR' || interviewType === 'Behavioral' ? 'Behavioral Relevance:' : 'Technical Relevance:'}
+                          </span> {interviewType === 'HR' || interviewType === 'Behavioral' ? qf.behavioralComment : qf.techComment}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {feedbackData.overallSuggestions && feedbackData.overallSuggestions.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+                      <svg className="w-6 h-6 text-blue-500" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z" fill="currentColor"/></svg>
+                      Overall Suggestions to Improve
+                    </h3>
+                    <ul className="list-disc ml-8 text-gray-700">
+                      {feedbackData.overallSuggestions.map((s: string, i: number) => (
+                        <li key={i}>{s}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
             )}
             <div className="flex justify-center mt-4">
               <button className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 shadow" onClick={() => { 
@@ -1050,6 +1227,8 @@ IMPORTANT: Return ONLY the JSON object above. Do NOT add any extra text, explana
                 setFeedbackData(null);
                 sessionStorage.removeItem('liveSessionState');
                 sessionStorage.removeItem('liveSessionTimeLeft');
+                // Set flag to show feedback modal on dashboard
+                sessionStorage.setItem('showFeedbackModal', 'true');
                 navigate('/dashboard');
               }}>
                 Close & Go to Dashboard

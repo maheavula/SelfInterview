@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BrainCircuit, Mic, Video, CheckCircle, XCircle, Info, Lightbulb, Globe, HelpCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_ENDPOINTS } from '../config/api';
+import ApiKeySecurity from '../utils/security';
+import { sanitizeApiKey, validateAndSanitize } from '../utils/sanitization';
 
 export default function InterviewSystemCheck() {
   const [micAllowed, setMicAllowed] = useState<null | boolean>(null);
@@ -21,6 +23,7 @@ export default function InterviewSystemCheck() {
   const [apiKeyValid, setApiKeyValid] = useState(false);
   const [apiKeyError, setApiKeyError] = useState('');
   const [showApiKeyHelp, setShowApiKeyHelp] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   // Check browser type
   const checkBrowser = () => {
@@ -36,28 +39,47 @@ export default function InterviewSystemCheck() {
   };
 
   useEffect(() => {
+    // Initialize security measures
+    ApiKeySecurity.initialize();
+    
     // Check browser first
     checkBrowser();
     
-    // Check microphone
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => setMicAllowed(true))
-      .catch(() => {
-        setMicAllowed(false);
-        setMicError('Microphone access denied or not found.');
-      });
-    // Check webcam
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        setCamAllowed(true);
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
+    // Parallel device checks for faster loading
+    const checkDevices = async () => {
+      try {
+        // Check microphone and webcam in parallel
+        const [audioStream, videoStream] = await Promise.allSettled([
+          navigator.mediaDevices.getUserMedia({ audio: true }),
+          navigator.mediaDevices.getUserMedia({ video: true })
+        ]);
+
+        // Handle audio result
+        if (audioStream.status === 'fulfilled') {
+          setMicAllowed(true);
+          audioStream.value.getTracks().forEach(track => track.stop());
+        } else {
+          setMicAllowed(false);
+          setMicError('Microphone access denied or not found.');
         }
-      })
-      .catch(() => {
-        setCamAllowed(false);
-        setCamError('Webcam access denied or not found.');
-      });
+
+        // Handle video result
+        if (videoStream.status === 'fulfilled') {
+          setCamAllowed(true);
+          if (videoRef.current) {
+            videoRef.current.srcObject = videoStream.value;
+          }
+        } else {
+          setCamAllowed(false);
+          setCamError('Webcam access denied or not found.');
+        }
+      } catch (error) {
+        console.error('Device check error:', error);
+      }
+    };
+
+    checkDevices();
+
     // Cleanup video stream
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
@@ -141,6 +163,21 @@ export default function InterviewSystemCheck() {
   const validateApiKey = async () => {
     setApiKeyError('');
     setApiKeyValid(false);
+    
+    // Sanitize and validate API key input
+    const sanitizedApiKey = sanitizeApiKey(apiKey);
+    if (!sanitizedApiKey) {
+      setApiKeyError('Invalid API key format. Please enter a valid Gemini API key.');
+      return;
+    }
+    
+    // Additional validation
+    const validation = ApiKeySecurity.validateApiKey(sanitizedApiKey);
+    if (!validation.isValid) {
+      setApiKeyError(validation.error || 'Invalid API key format');
+      return;
+    }
+    
     try {
       const res = await fetch(API_ENDPOINTS.GEMINI, {
         method: 'POST',
@@ -148,13 +185,13 @@ export default function InterviewSystemCheck() {
         body: JSON.stringify({
           prompt: 'hello',
           model: 'gemini-2.5-pro',
-          userApiKey: apiKey // Pass user's API key to proxy
+          userApiKey: sanitizedApiKey // Use sanitized API key
         })
       });
       if (res.ok) {
         setApiKeyValid(true);
-        // Store the user's API key for the session
-        sessionStorage.setItem('geminiApiKey', apiKey);
+        // Store the sanitized API key securely
+        ApiKeySecurity.storeApiKey(sanitizedApiKey);
       } else {
         let errMsg = 'Invalid Gemini API key. Please enter a valid key.';
         try {
@@ -320,11 +357,27 @@ export default function InterviewSystemCheck() {
           {apiKeyError && <div className="text-red-400 text-sm mt-2 text-left w-full">{apiKeyError}</div>}
           {apiKeyValid && <div className="text-green-400 text-sm mt-2 text-left w-full">Key validated!</div>}
         </div>
+        
+        {/* Privacy Policy Notice - Separate div below API key div */}
+        <div className="w-full max-w-md mx-auto mt-4 bg-blue-900/20 rounded-2xl p-4 border border-blue-500/30 shadow-lg">
+          <div className="flex items-start gap-3">
+            <input 
+              type="checkbox" 
+              id="privacy-checkbox"
+              className="w-4 h-4 mt-0.5 text-blue-600 bg-gray-900 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+              checked={privacyAccepted}
+              onChange={(e) => setPrivacyAccepted(e.target.checked)}
+            />
+            <div className="text-xs text-blue-200 leading-relaxed">
+              <span className="font-semibold text-blue-300">Privacy Notice:</span> By entering your Gemini API key, you agree that your interview responses and data may be processed by Google's AI services. Your API key is stored locally in your browser and your interview data is saved to provide feedback. We do not share your personal information with third parties.
+            </div>
+          </div>
+        </div>
         <button
           type="button"
           className="mt-8 px-10 py-4 rounded-2xl font-bold text-white text-xl bg-gradient-to-r from-indigo-500 via-sky-400 to-purple-500 shadow-xl transition-all duration-300 focus:outline-none ring-2 ring-purple-400/40 ring-offset-2 hover:scale-105 hover:shadow-purple-500/60 animate-pulse-glow"
           onClick={() => navigate('/livesession')}
-          disabled={!apiKeyValid || isChrome === false || camAllowed !== true || micAllowed !== true}
+          disabled={!apiKeyValid || isChrome === false || camAllowed !== true || micAllowed !== true || !privacyAccepted}
         >
           Start Live Session
         </button>
