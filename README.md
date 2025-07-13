@@ -1,5 +1,8 @@
 # selfinterview AI+ – AI-Powered Mock Interview Platform
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Copyright](https://img.shields.io/badge/Copyright-2025%20K%20Janardhan%20Reddy%20%26%20A%20Maheswar%20Reddy-red.svg)](COPYRIGHT.md)
+
 selfinterview AI+ is a next-generation interview preparation platform that uses advanced artificial intelligence to simulate realistic interview scenarios, provide instant feedback, and help you build confidence for your next big opportunity.
 
 ## 🚀 Features
@@ -79,6 +82,21 @@ selfinterview AI+ is a next-generation interview preparation platform that uses 
 ## 👨‍💻 Creators
 
 **K Janardhan Reddy & A Maheswar Reddy**
+
+## 📄 License & Copyright
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+**Copyright Notice:**
+- **Copyright © 2025 K Janardhan Reddy & A Maheswar Reddy**
+- **All rights reserved.**
+
+### Usage Restrictions:
+- **No copying, modification, or distribution without explicit permission**
+- **No commercial use without written consent from the copyright holders**
+- **No derivative works without authorization**
+
+For licensing inquiries, please contact the copyright holders.
 
 ---
 

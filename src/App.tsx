@@ -1,3 +1,11 @@
+/**
+ * Copyright (c) 2025 K Janardhan Reddy & A Maheswar Reddy
+ * All rights reserved.
+ * 
+ * This file is part of the selfinterview AI+ project.
+ * No copying, modification, or distribution without explicit permission.
+ */
+
 import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Header } from './components/Header';

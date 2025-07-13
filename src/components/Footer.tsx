@@ -23,12 +23,8 @@ export const Footer = () => {
         <div className="mt-12 pt-8 border-t border-gray-800">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <p className="text-gray-400 text-sm">
-              &copy; {new Date().getFullYear()} selfinterview AI+. All rights
-              reserved.
+              © 2025 K Janardhan Reddy & A Maheswar Reddy
             </p>
-            <span className="text-gray-400 text-sm">
-            <span className="font-bold">  Created by K Janardhan Reddy & A Maheswar Reddy</span>
-            </span>  
             <div className="mt-4 md:mt-0">
               <div className="flex items-center space-x-3">
                 <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
