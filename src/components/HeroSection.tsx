@@ -72,7 +72,7 @@ export const HeroSection = () => {
               className="px-8 py-3 text-base font-medium rounded-md shadow-lg text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 transition-all duration-300 hover:shadow-violet-500/40 shadow-violet-500/20"
               onClick={e => { e.preventDefault(); navigate('/signup'); }}
             >
-              Start Free Trial
+              Start Practice
             </a>
           </div>
         </div>

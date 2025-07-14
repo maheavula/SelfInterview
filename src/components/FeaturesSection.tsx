@@ -161,7 +161,7 @@ export const FeaturesSection = () => {
         
         <div className="mt-20 text-center">
           <a href="#signup" className="inline-flex items-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/20 hover:shadow-violet-500/40 transition-all duration-300" onClick={e => { e.preventDefault(); navigate('/signup'); }}>
-            Start Free Trial
+            Start Practice
           </a>
         </div>
       </div>

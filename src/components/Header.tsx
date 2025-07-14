@@ -48,7 +48,7 @@ export const Header = () => {
               Log In
             </a>
             <a href="#signup" className="ml-4 relative inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-violet-500 shadow-lg shadow-violet-500/20 transition-all duration-300 hover:shadow-violet-500/40" onClick={e => { e.preventDefault(); navigate('/signup'); }}>
-              <span className="relative z-10">Start Free Trial</span>
+              <span className="relative z-10">Sign Up</span>
             </a>
           </div>
           <div className="flex md:hidden">
@@ -73,7 +73,7 @@ export const Header = () => {
                   Log In
                 </a>
                 <a href="#signup" className="block px-3 py-2 rounded-md text-base font-medium text-white bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700" onClick={e => { e.preventDefault(); setMobileMenuOpen(false); navigate('/signup'); }}>
-                  Start Free Trial
+                  Sign Up
                 </a>
               </div>
             </div>
