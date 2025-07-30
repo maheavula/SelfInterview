@@ -406,64 +406,6 @@ export default function Dashboard() {
           <p className="text-lg text-sky-100 mb-6 font-medium">Here you can view your progress, stats, and manage your interview sessions.</p>
           {/* Interview History Table */}
           <div className="w-full mt-8">
-            {/* Debug Section */}
-            <div className="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-2">Debug Info</h3>
-              <div className="text-sm text-gray-300 space-y-1">
-                <div>Current User Email: {email}</div>
-                <div>Session Email: {sessionStorage.getItem('userEmail')}</div>
-                <div>Total History Items: {interviewHistory.length}</div>
-                <div>Loading: {loadingHistory ? 'Yes' : 'No'}</div>
-              </div>
-              <button 
-                onClick={() => {
-                  console.log('Manual refresh triggered');
-                  // Trigger fetchHistory again
-                  const fetchHistory = async () => {
-                    if (!email) return;
-                    setLoadingHistory(true);
-                    try {
-                      const q = query(
-                        collection(db, 'interviewFeedbacks'),
-                        orderBy('timestamp', 'desc')
-                      );
-                      const querySnapshot = await getDocs(q);
-                      const allData = querySnapshot.docs.map(doc => ({ 
-                        id: doc.id, 
-                        ...doc.data() 
-                      })) as Array<{
-                        id: string;
-                        feedback: any;
-                        interviewType: string;
-                        userInputs?: {
-                          name: string;
-                          jobRole: string;
-                          company: string;
-                          experience: string;
-                          interviewType: string;
-                          jobDescription: string;
-                          resumeText: string;
-                          email?: string;
-                        };
-                        timestamp: string;
-                        user: string | null;
-                      }>;
-                      console.log('Manual refresh - All data:', allData);
-                      setInterviewHistory(allData);
-                    } catch (err) {
-                      console.error('Manual refresh failed:', err);
-                    } finally {
-                      setLoadingHistory(false);
-                    }
-                  };
-                  fetchHistory();
-                }}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                Refresh History
-              </button>
-            </div>
-            
             <h2 className="text-xl font-bold text-white mb-4 text-left">Interview History</h2>
             {loadingHistory ? (
               <div className="text-center text-gray-400 py-8">Loading history...</div>
