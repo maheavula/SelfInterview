@@ -4,10 +4,5 @@
   "installCommand": "npm ci",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
-  ],
-  "functions": {
-    "server.js": {
-      "runtime": "nodejs18.x"
-    }
-  }
+  ]
 } 
