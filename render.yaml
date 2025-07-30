@@ -3,8 +3,12 @@ services:
     name: selfinterview-api
     env: node
     plan: free
-    buildCommand: npm install
-    startCommand: node server.js
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
-        value: production 
+        value: production
+      - key: PORT
+        value: 10000
+    healthCheckPath: /health
+    autoDeploy: true 

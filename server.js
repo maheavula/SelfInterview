@@ -73,6 +73,15 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Apply security headers to all routes
 app.use(securityHeaders);
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
+
 // Rate limiting
 import rateLimit from 'express-rate-limit';
 const limiter = rateLimit({
