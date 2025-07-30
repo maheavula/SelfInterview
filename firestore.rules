@@ -1,40 +1,84 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to read and write their own interview feedbacks
-    match /interviewFeedbacks/{document} {
-      allow read, write: if request.auth != null && 
-        (request.auth.token.email == resource.data.user || 
-         request.auth.token.email == request.resource.data.user) &&
-        // Validate data structure
-        request.resource.data.keys().hasAll(['feedback', 'interviewType', 'timestamp', 'user']) &&
-        request.resource.data.timestamp is timestamp &&
-        request.resource.data.user is string;
-    }
     
-    // Allow users to read and write their own user profile data
+    // ===== USER PROFILES =====
+    // Users can only read and write their own profile data
     match /users/{userId} {
       allow read, write: if request.auth != null && 
         request.auth.uid == userId &&
-        // Validate profile data structure
+        // Validate required fields for profile data
         request.resource.data.keys().hasAll(['email', 'updatedAt']) &&
         request.resource.data.email is string &&
-        request.resource.data.updatedAt is timestamp;
+        request.resource.data.updatedAt is string &&
+        // Ensure email matches authenticated user
+        request.resource.data.email == request.auth.token.email &&
+        // Validate optional profile fields
+        (request.resource.data.fullName == null || request.resource.data.fullName is string) &&
+        (request.resource.data.graduation == null || request.resource.data.graduation is string) &&
+        (request.resource.data.year == null || request.resource.data.year is string) &&
+        (request.resource.data.branch == null || request.resource.data.branch is string) &&
+        (request.resource.data.experience == null || request.resource.data.experience is string) &&
+        (request.resource.data.role == null || request.resource.data.role is string);
     }
     
-    // Rate limiting for interview feedbacks (max 10 per hour per user)
+    // ===== INTERVIEW FEEDBACKS =====
+    // Users can read and write their own interview feedbacks
     match /interviewFeedbacks/{document} {
-      allow create: if request.auth != null && 
-        request.auth.token.email == request.resource.data.user &&
-        // Check rate limit
-        getCountFromTime(
-          /databases/$(database)/documents/interviewFeedbacks,
-          request.auth.token.email,
-          duration.value(1, 'h')
-        ) < 10;
+      allow read, write: if request.auth != null && 
+        // Ensure user email matches the feedback owner
+        (request.auth.token.email == resource.data.user || 
+         request.auth.token.email == request.resource.data.user) &&
+        // Validate required fields
+        request.resource.data.keys().hasAll(['feedback', 'interviewType', 'timestamp', 'user']) &&
+        request.resource.data.timestamp is string &&
+        request.resource.data.user is string &&
+        request.resource.data.interviewType is string &&
+        request.resource.data.feedback is map &&
+        // Ensure user field matches authenticated user
+        request.resource.data.user == request.auth.token.email &&
+        // Validate optional userInputs field
+        (request.resource.data.userInputs == null || request.resource.data.userInputs is map);
     }
     
-    // Deny all other access by default
+    // ===== USER FEEDBACK =====
+    // Users can create feedback entries with proper validation
+    match /userFeedback/{document} {
+      allow create: if request.auth != null &&
+        // Validate required fields
+        request.resource.data.keys().hasAll(['timestamp']) &&
+        request.resource.data.timestamp is string &&
+        // Validate rating fields (all should be numbers between 0-5)
+        (request.resource.data.interviewExperience == null || 
+         (request.resource.data.interviewExperience is number && 
+          request.resource.data.interviewExperience >= 0 && 
+          request.resource.data.interviewExperience <= 5)) &&
+        (request.resource.data.aiQuestionQuality == null || 
+         (request.resource.data.aiQuestionQuality is number && 
+          request.resource.data.aiQuestionQuality >= 0 && 
+          request.resource.data.aiQuestionQuality <= 5)) &&
+        (request.resource.data.userInterface == null || 
+         (request.resource.data.userInterface is number && 
+          request.resource.data.userInterface >= 0 && 
+          request.resource.data.userInterface <= 5)) &&
+        (request.resource.data.overallSatisfaction == null || 
+         (request.resource.data.overallSatisfaction is number && 
+          request.resource.data.overallSatisfaction >= 0 && 
+          request.resource.data.overallSatisfaction <= 5)) &&
+        // Validate text fields
+        (request.resource.data.experienceText == null || request.resource.data.experienceText is string) &&
+        (request.resource.data.userEmail == null || 
+         (request.resource.data.userEmail is string && 
+          request.resource.data.userEmail == request.auth.token.email));
+      
+      // Users can read their own feedback entries
+      allow read: if request.auth != null &&
+        (resource.data.userEmail == request.auth.token.email || 
+         resource.data.userEmail == null);
+    }
+    
+    // ===== DENY ALL OTHER ACCESS =====
+    // Default deny rule - blocks all other access
     match /{document=**} {
       allow read, write: if false;
     }
