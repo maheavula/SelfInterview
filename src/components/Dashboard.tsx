@@ -136,6 +136,8 @@ export default function Dashboard() {
     id: string;
     feedback: any;
     interviewType: string;
+    questions?: string[];
+    answers?: string[];
     userInputs?: {
       name: string;
       jobRole: string;
@@ -180,6 +182,7 @@ export default function Dashboard() {
   React.useEffect(() => {
     if (user?.email) {
       sessionStorage.setItem('userEmail', user.email);
+      console.log('User email set in sessionStorage:', user.email);
     }
   }, [user?.email]);
 
@@ -195,88 +198,163 @@ export default function Dashboard() {
   // Fetch interview history on mount
   React.useEffect(() => {
     const fetchHistory = async () => {
-      if (!email) return;
+      if (!email || !user) {
+        console.log('No email or user available:', { email, user: !!user });
+        return;
+      }
+      console.log('Fetching interview history for:', { email, userId: user.uid });
       setLoadingHistory(true);
       try {
-        // Fetch all feedbacks and filter by user email on client side
-        // This handles both new feedbacks (with proper user field) and existing ones (with null user)
-        const q = query(
-          collection(db, 'interviewFeedbacks'),
-          orderBy('timestamp', 'desc')
-        );
-        const querySnapshot = await getDocs(q);
-        const allData = querySnapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        })) as Array<{
-          id: string;
-          feedback: any;
-          interviewType: string;
-          userInputs?: {
-            name: string;
-            jobRole: string;
-            company: string;
-            experience: string;
-            interviewType: string;
-            jobDescription: string;
-            resumeText: string;
-            email?: string;
-          };
-          timestamp: string;
-          user: string | null;
-        }>;
-        
-        console.log('Current user email:', email);
-        console.log('All feedbacks from database:', allData);
-        
-        // Improved filtering logic - check for exact email match or null user
-        const filteredData = allData.filter(item => {
-          const userMatch = item.user === email;
-          const nullUser = item.user === null;
-          const userInputsMatch = item.userInputs?.email === email;
-          
-          // Also check if the user email is stored in sessionStorage for this session
-          const sessionUserEmail = sessionStorage.getItem('userEmail');
-          const sessionMatch = item.user === sessionUserEmail;
-          
-          console.log(`Item ${item.id}: user="${item.user}", userInputs.email="${item.userInputs?.email}", sessionEmail="${sessionUserEmail}", currentEmail="${email}", matches=${userMatch || nullUser || userInputsMatch || sessionMatch}`);
-          
-          return userMatch || nullUser || userInputsMatch || sessionMatch;
-        });
-        
-        // If no user-specific data found, show all data as fallback (for debugging)
-        if (filteredData.length === 0 && allData.length > 0) {
-          console.log('No user-specific data found, showing all data as fallback');
-          setInterviewHistory(allData);
-          setCurrentPage(0);
-          return;
-        }
-        
-        // Deduplicate entries that might have been created within seconds of each other
-        const deduplicatedData = filteredData.reduce((acc: any[], current: any) => {
-          const existingIndex = acc.findIndex(item => 
-            item.user === current.user && 
-            item.timestamp === current.timestamp &&
-            Math.abs(new Date(item.timestamp).getTime() - new Date(current.timestamp).getTime()) < 5000 // 5 seconds window
+        // First try the new server-side filtering approach
+        try {
+          // Query for documents where user field matches current user email
+          const userQuery = query(
+            collection(db, 'interviewFeedbacks'),
+            where('user', '==', email),
+            orderBy('timestamp', 'desc')
           );
           
-          if (existingIndex === -1) {
-            acc.push(current);
-          } else {
-            // Keep the one with more complete data
-            const existing = acc[existingIndex];
-            if (current.userInputs && !existing.userInputs) {
-              acc[existingIndex] = current;
-            }
-          }
-          return acc;
-        }, []);
+          const userSnapshot = await getDocs(userQuery);
+          console.log('User query results:', userSnapshot.docs.length);
+          
+          // For now, let's use the simpler approach and filter on client side
+          // since the nested field query might not work as expected
+          const allQuery = query(
+            collection(db, 'interviewFeedbacks'),
+            orderBy('timestamp', 'desc')
+          );
+          
+          const allSnapshot = await getDocs(allQuery);
+          const allData = allSnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          })) as Array<{
+            id: string;
+            feedback: any;
+            interviewType: string;
+            userInputs?: {
+              name: string;
+              jobRole: string;
+              company: string;
+              experience: string;
+              interviewType: string;
+              jobDescription: string;
+              resumeText: string;
+              email?: string;
+            };
+            timestamp: string;
+            user: string | null;
+          }>;
+          
+          console.log('Current user email:', email);
+          console.log('Total feedbacks found:', allData.length);
+          
+          // Debug: Log each document to see the structure
+          allData.forEach((item, index) => {
+            console.log(`Document ${index + 1}:`, {
+              id: item.id,
+              user: item.user,
+              userInputsEmail: item.userInputs?.email,
+              timestamp: item.timestamp
+            });
+          });
+          
+          // Filter data to only show current user's feedback
+          const filteredData = allData.filter(item => {
+            const userMatch = item.user === email;
+            const userInputsMatch = item.userInputs?.email === email;
+            const sessionUserEmail = sessionStorage.getItem('userEmail');
+            const sessionMatch = item.user === sessionUserEmail;
+            
+            const isMatch = userMatch || userInputsMatch || sessionMatch;
+            console.log(`Filtering item ${item.id}:`, {
+              user: item.user,
+              userInputsEmail: item.userInputs?.email,
+              sessionEmail: sessionUserEmail,
+              currentEmail: email,
+              userMatch,
+              userInputsMatch,
+              sessionMatch,
+              isMatch
+            });
+            
+            return isMatch;
+          });
+          
+          console.log('Filtered feedbacks for user:', filteredData.length);
+          setInterviewHistory(filteredData);
+          setCurrentPage(0);
+          
+        } catch (queryError) {
+          console.error('Server-side query failed, falling back to client-side filtering:', queryError);
+          
+          // Fallback to the old method
+          const q = query(
+            collection(db, 'interviewFeedbacks'),
+            orderBy('timestamp', 'desc')
+          );
+          const querySnapshot = await getDocs(q);
+          const allData = querySnapshot.docs.map(doc => ({ 
+            id: doc.id, 
+            ...doc.data() 
+          })) as Array<{
+            id: string;
+            feedback: any;
+            interviewType: string;
+            userInputs?: {
+              name: string;
+              jobRole: string;
+              company: string;
+              experience: string;
+              interviewType: string;
+              jobDescription: string;
+              resumeText: string;
+              email?: string;
+            };
+            timestamp: string;
+            user: string | null;
+          }>;
+          
+          console.log('Fallback - Current user email:', email);
+          console.log('Fallback - Total feedbacks found:', allData.length);
+          
+          // Debug: Log each document to see the structure
+          allData.forEach((item, index) => {
+            console.log(`Fallback Document ${index + 1}:`, {
+              id: item.id,
+              user: item.user,
+              userInputsEmail: item.userInputs?.email,
+              timestamp: item.timestamp
+            });
+          });
+          
+          // Filter data to only show current user's feedback
+          const filteredData = allData.filter(item => {
+            const userMatch = item.user === email;
+            const userInputsMatch = item.userInputs?.email === email;
+            const sessionUserEmail = sessionStorage.getItem('userEmail');
+            const sessionMatch = item.user === sessionUserEmail;
+            
+            const isMatch = userMatch || userInputsMatch || sessionMatch;
+            console.log(`Fallback Filtering item ${item.id}:`, {
+              user: item.user,
+              userInputsEmail: item.userInputs?.email,
+              sessionEmail: sessionUserEmail,
+              currentEmail: email,
+              userMatch,
+              userInputsMatch,
+              sessionMatch,
+              isMatch
+            });
+            
+            return isMatch;
+          });
+          
+          console.log('Fallback - Filtered feedbacks for user:', filteredData.length);
+          setInterviewHistory(filteredData);
+          setCurrentPage(0);
+        }
         
-        console.log('Filtered feedbacks for user:', filteredData);
-        console.log('Final deduplicated feedbacks:', deduplicatedData);
-        setInterviewHistory(deduplicatedData);
-        // Reset to first page when history changes
-        setCurrentPage(0);
       } catch (err) {
         console.error('Failed to fetch interview history:', err);
       } finally {
@@ -284,7 +362,7 @@ export default function Dashboard() {
       }
     };
     fetchHistory();
-  }, [email]);
+  }, [email, user]);
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 relative overflow-x-hidden">
@@ -440,7 +518,9 @@ export default function Dashboard() {
                             onClick={() => { 
                               setSelectedFeedback({ 
                                 ...item.feedback, 
-                                userInputs: item.userInputs 
+                                userInputs: item.userInputs,
+                                rawQuestions: item.questions,
+                                rawAnswers: item.answers
                               }); 
                               setFeedbackModalOpen(true); 
                             }}
@@ -651,6 +731,31 @@ export default function Dashboard() {
                               )}
                             </div>
                           )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback: Raw Questions and Answers */}
+              {(!selectedFeedback.questions || !Array.isArray(selectedFeedback.questions)) && 
+               selectedFeedback.rawQuestions && selectedFeedback.rawAnswers && (
+                <div>
+                  <div className="font-semibold text-lg mb-3 text-indigo-300 flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Interview Questions & Answers
+                  </div>
+                  <div className="space-y-4">
+                    {selectedFeedback.rawQuestions.map((question: string, i: number) => (
+                      <div key={i} className="bg-gray-800/60 rounded-lg p-4 border border-gray-700/50">
+                        <div className="mb-3">
+                          <div className="font-semibold text-purple-200 mb-2">Q{i + 1}: {question}</div>
+                          <div className="text-gray-300 text-sm bg-gray-900/50 rounded p-2">
+                            <span className="font-semibold text-gray-400">Your Answer:</span> {selectedFeedback.rawAnswers[i] || 'No answer provided'}
+                          </div>
                         </div>
                       </div>
                     ))}

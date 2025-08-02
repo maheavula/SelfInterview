@@ -209,22 +209,35 @@ export default function Livesession() {
       setShowFeedback(true);
       setIsFeedbackLoading(false);
       // Save to Firestore
-      await addDoc(collection(db, "interviewFeedbacks"), {
+      const userEmail = sessionStorage.getItem('userEmail') || user?.email || null;
+      const userInputs = (() => {
+        try {
+          const formData = sessionStorage.getItem('interviewForm');
+          const parsed = formData ? JSON.parse(formData) : {};
+          // Ensure user email is included in userInputs for better tracking
+          return {
+            ...parsed,
+            email: userEmail
+          };
+        } catch (e) {
+          return { email: userEmail };
+        }
+      })();
+
+      const feedbackData = {
         feedback,
         interviewType: interviewType,
-        // Get all user input data from sessionStorage
-        userInputs: (() => {
-          try {
-            const formData = sessionStorage.getItem('interviewForm');
-            return formData ? JSON.parse(formData) : {};
-          } catch (e) {
-            return {};
-          }
-        })(),
+        // Include the actual questions and answers
+        questions: answeredPairs.map(p => p.question),
+        answers: answeredPairs.map(p => p.answer),
+        // Get all user input data from sessionStorage with email included
+        userInputs,
         timestamp: new Date().toISOString(),
-        user: sessionStorage.getItem('userEmail') || user?.email || null // Ensure user email is set
-      });
-      console.log('Feedback saved successfully to Firestore');
+        user: userEmail // Ensure user email is set
+      };
+
+      await addDoc(collection(db, "interviewFeedbacks"), feedbackData);
+      console.log('Feedback saved successfully to Firestore with user email:', userEmail);
     } catch (e: any) {
       console.error('Error generating or saving feedback:', e);
       setFeedbackData({ error: e.message || 'Failed to generate feedback.' });
